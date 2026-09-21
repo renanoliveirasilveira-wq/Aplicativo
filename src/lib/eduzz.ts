@@ -12,9 +12,8 @@ type ProvisionarAcessoInput = {
 };
 
 /**
- * Cria (ou reativa) o acesso de um comprador vindo da Eduzz.
- * Chamada pelo webhook em `src/routes/api/webhooks/eduzz.tsx` assim que o
- * evento de compra aprovada estiver mapeado — ver TODO nesse arquivo.
+ * Cria (ou reativa) o acesso de um comprador vindo da Eduzz. Chamada pelo
+ * webhook em `src/routes/api/webhooks/eduzz.tsx` quando uma fatura é paga.
  */
 export async function provisionarAcessoEduzz({
   email,
@@ -26,15 +25,25 @@ export async function provisionarAcessoEduzz({
   });
 
   if (existente) {
+    // Reativa (cobre o caso de reembolso seguido de nova compra, por
+    // exemplo) e desbanir, se estava banido por revogação anterior.
     await db
       .update(user)
       .set({ status: "active", eduzzTransactionId })
       .where(eq(user.email, email));
+    if ((existente as unknown as { banned?: boolean }).banned) {
+      await auth.api.unbanUser({ body: { userId: existente.id } });
+    }
     return { criado: false };
   }
 
-  const senhaTemporaria = randomBytes(24).toString("base64url");
-  await auth.api.signUpEmail({
+  // A conta precisa nascer com alguma senha (o better-auth exige uma no
+  // signUpEmail), mas ninguém nunca vai usá-la — logo em seguida
+  // disparamos o fluxo de "definir senha" por e-mail (ver
+  // sendResetPassword em src/lib/auth.ts), que é o único jeito real do
+  // aluno entrar na conta pela primeira vez.
+  const senhaTemporaria = randomBytes(32).toString("base64url");
+  const resultado = await auth.api.signUpEmail({
     body: { email, name: nome, password: senhaTemporaria },
   });
 
@@ -43,7 +52,32 @@ export async function provisionarAcessoEduzz({
     .set({ status: "active", eduzzTransactionId })
     .where(eq(user.email, email));
 
-  // TODO: disparar e-mail de "defina sua senha" (reset de senha do
-  // better-auth) em vez de deixar a senha temporária apenas nos logs.
-  return { criado: true };
+  await auth.api.requestPasswordReset({
+    body: { email, redirectTo: "/definir-senha" },
+  });
+
+  return { criado: true, userId: resultado.user.id };
+}
+
+/**
+ * Revoga o acesso de um aluno (cancelamento ou reembolso vindos da Eduzz).
+ * Usa o mecanismo de banimento do próprio plugin admin do better-auth —
+ * o mesmo que o painel administrativo já usa em bloquearAluno (ver
+ * src/lib/admin.functions.ts) — pra bloquear login sem apagar a conta,
+ * caso a pessoa recompre depois.
+ */
+export async function revogarAcessoEduzz(email: string) {
+  const existente = await db.query.user.findFirst({
+    where: eq(user.email, email),
+  });
+  if (!existente) return { revogado: false };
+
+  await db.update(user).set({ status: "inactive" }).where(eq(user.email, email));
+  await auth.api.banUser({
+    body: {
+      userId: existente.id,
+      banReason: "Acesso revogado — cancelamento ou reembolso via Eduzz",
+    },
+  });
+  return { revogado: true };
 }

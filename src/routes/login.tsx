@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { createFileRoute, redirect, useRouter } from '@tanstack/react-router'
 
-import { signIn, signUp } from '@/lib/auth-client'
+import { authClient, signIn, signUp } from '@/lib/auth-client'
 import { getCurrentSession } from '@/lib/session'
 
 export const Route = createFileRoute('/login')({
@@ -25,6 +25,22 @@ function Login() {
   const [senha, setSenha] = useState('')
   const [erro, setErro] = useState('')
   const [carregando, setCarregando] = useState(false)
+  const [avisoRecuperacao, setAvisoRecuperacao] = useState('')
+
+  async function onEsqueciSenha() {
+    setErro('')
+    setAvisoRecuperacao('')
+    if (!email) {
+      setErro('Digite seu e-mail acima antes de pedir o link de redefinição.')
+      return
+    }
+    setCarregando(true)
+    await authClient.requestPasswordReset({ email, redirectTo: '/definir-senha' })
+    setCarregando(false)
+    setAvisoRecuperacao(
+      'Se esse e-mail tiver uma conta, enviamos um link para você definir uma nova senha.',
+    )
+  }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -123,6 +139,9 @@ function Login() {
           </div>
 
           {erro && <p className="text-sm text-destructive">{erro}</p>}
+          {avisoRecuperacao && (
+            <p className="text-sm text-muted-foreground">{avisoRecuperacao}</p>
+          )}
 
           <button
             type="submit"
@@ -135,6 +154,17 @@ function Login() {
                 ? 'Entrar'
                 : 'Criar conta'}
           </button>
+
+          {modo === 'entrar' && (
+            <button
+              type="button"
+              onClick={onEsqueciSenha}
+              disabled={carregando}
+              className="w-full text-center text-xs text-muted-foreground underline-offset-2 hover:underline disabled:opacity-50"
+            >
+              Esqueci minha senha
+            </button>
+          )}
         </form>
 
         <p className="mt-5 text-center text-xs text-muted-foreground">

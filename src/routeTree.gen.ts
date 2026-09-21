@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as AceitarTermosRouteImport } from './routes/aceitar-termos'
+import { Route as DefinirSenhaRouteImport } from './routes/definir-senha'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as PrivacidadeRouteImport } from './routes/privacidade'
 import { Route as TermosRouteImport } from './routes/termos'
@@ -31,6 +32,11 @@ const AppRoute = AppRouteImport.update({
 const AceitarTermosRoute = AceitarTermosRouteImport.update({
   id: '/aceitar-termos',
   path: '/aceitar-termos',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DefinirSenhaRoute = DefinirSenhaRouteImport.update({
+  id: '/definir-senha',
+  path: '/definir-senha',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -97,6 +103,7 @@ const ApiWebhooksEduzzRoute = ApiWebhooksEduzzRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
   '/aceitar-termos': typeof AceitarTermosRoute
+  '/definir-senha': typeof DefinirSenhaRoute
   '/login': typeof LoginRoute
   '/privacidade': typeof PrivacidadeRoute
   '/termos': typeof TermosRoute
@@ -111,6 +118,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/aceitar-termos': typeof AceitarTermosRoute
+  '/definir-senha': typeof DefinirSenhaRoute
   '/login': typeof LoginRoute
   '/privacidade': typeof PrivacidadeRoute
   '/termos': typeof TermosRoute
@@ -127,6 +135,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_app': typeof AppRouteWithChildren
   '/aceitar-termos': typeof AceitarTermosRoute
+  '/definir-senha': typeof DefinirSenhaRoute
   '/login': typeof LoginRoute
   '/privacidade': typeof PrivacidadeRoute
   '/termos': typeof TermosRoute
@@ -145,6 +154,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/aceitar-termos'
+    | '/definir-senha'
     | '/login'
     | '/privacidade'
     | '/termos'
@@ -159,6 +169,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/aceitar-termos'
+    | '/definir-senha'
     | '/login'
     | '/privacidade'
     | '/termos'
@@ -174,6 +185,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/_app'
     | '/aceitar-termos'
+    | '/definir-senha'
     | '/login'
     | '/privacidade'
     | '/termos'
@@ -191,6 +203,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   AppRoute: typeof AppRouteWithChildren
   AceitarTermosRoute: typeof AceitarTermosRoute
+  DefinirSenhaRoute: typeof DefinirSenhaRoute
   LoginRoute: typeof LoginRoute
   PrivacidadeRoute: typeof PrivacidadeRoute
   TermosRoute: typeof TermosRoute
@@ -212,6 +225,13 @@ declare module '@tanstack/react-router' {
       path: '/aceitar-termos'
       fullPath: '/aceitar-termos'
       preLoaderRoute: typeof AceitarTermosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/definir-senha': {
+      id: '/definir-senha'
+      path: '/definir-senha'
+      fullPath: '/definir-senha'
+      preLoaderRoute: typeof DefinirSenhaRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/login': {
@@ -336,6 +356,7 @@ const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
 const rootRouteChildren: RootRouteChildren = {
   AppRoute: AppRouteWithChildren,
   AceitarTermosRoute: AceitarTermosRoute,
+  DefinirSenhaRoute: DefinirSenhaRoute,
   LoginRoute: LoginRoute,
   PrivacidadeRoute: PrivacidadeRoute,
   TermosRoute: TermosRoute,
@@ -345,12 +366,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { createStart } from '@tanstack/react-start'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-  }
-}

@@ -1,8 +1,13 @@
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { admin } from "better-auth/plugins";
+import { Resend } from "resend";
 
 import { db } from "./db";
+
+const resend = process.env["RESEND_API_KEY"]
+  ? new Resend(process.env["RESEND_API_KEY"])
+  : null;
 
 export const auth = betterAuth({
   database: drizzleAdapter(db, {
@@ -10,6 +15,39 @@ export const auth = betterAuth({
   }),
   emailAndPassword: {
     enabled: true,
+    // Usado tanto pelo "esqueci minha senha" (login) quanto pelo fluxo da
+    // Eduzz: quando uma compra é aprovada, a conta é criada com uma senha
+    // aleatória que ninguém sabe, e esse e-mail é o único jeito do aluno
+    // definir a senha de verdade — ver provisionarAcessoEduzz em
+    // src/lib/eduzz.ts. Sem RESEND_API_KEY configurada (ex.: em dev
+    // local), fica só um aviso no console em vez de quebrar o app.
+    sendResetPassword: async ({ user, url }) => {
+      if (!resend) {
+        console.warn(
+          `[auth] RESEND_API_KEY não configurada — e-mail de redefinição de senha não enviado. Link: ${url}`,
+        );
+        return;
+      }
+      const remetente = process.env["EMAIL_FROM"];
+      if (!remetente) {
+        console.warn("[auth] EMAIL_FROM não configurada — e-mail de redefinição não enviado.");
+        return;
+      }
+      const { error } = await resend.emails.send({
+        from: remetente,
+        to: user.email,
+        subject: "Defina sua senha — Manual de Contextualização Bíblica",
+        html: `
+          <p>Olá${user.name ? `, ${user.name}` : ""}!</p>
+          <p>Clique no link abaixo para definir a senha da sua conta no Manual de Contextualização Bíblica:</p>
+          <p><a href="${url}">${url}</a></p>
+          <p>Se você não reconhece essa solicitação, pode ignorar este e-mail.</p>
+        `,
+      });
+      if (error) {
+        console.error("[auth] falha ao enviar e-mail de redefinição de senha:", error);
+      }
+    },
   },
   // Dá o painel administrativo (src/routes/admin.tsx) pra criar, bloquear
   // e remover alunos sem depender da Eduzz — ver
