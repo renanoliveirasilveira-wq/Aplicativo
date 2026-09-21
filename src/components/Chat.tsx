@@ -101,7 +101,7 @@ function BarraDeUso({
       <div className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-secondary">
         <div
           className={`h-full rounded-full transition-all ${
-            uso.atingiuLimite ? "bg-destructive" : "bg-gradient-flame"
+            uso.atingiuLimite ? "bg-gold" : "bg-gradient-flame"
           }`}
           style={{ width: `${uso.percentual}%` }}
         />
@@ -301,6 +301,8 @@ export default function Chat({
     }
   }, [conversaQuery.data]);
 
+  const [avisoCredito, setAvisoCredito] = useState<string | null>(null);
+
   const mutation = useMutation({
     mutationFn: (t: string) => enviarFn({ data: { conversaId, texto: t } }),
     onSuccess: (resultado, t) => {
@@ -314,6 +316,7 @@ export default function Chat({
           conteudo: resultado.resposta,
         },
       ]);
+      setAvisoCredito(resultado.aviso ?? null);
       queryClient.invalidateQueries({ queryKey: ["uso-diario"] });
       // Mantém a pré-visualização de conversas recentes na barra lateral
       // em dia (aparece uma conversa nova ou reordena pela mais recente).
@@ -325,15 +328,18 @@ export default function Chat({
     fimRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [mensagens.length, mutation.isPending]);
 
-  const limiteAtingido = usoQuery.data?.atingiuLimite ?? false;
   // Enquanto a resposta está sendo gerada, o campo fica travado — sem
   // isso, o cursor continua piscando e parece que nada está acontecendo.
-  const entradaBloqueada = limiteAtingido || mutation.isPending;
+  // Atingir o crédito mensal NÃO bloqueia mais o campo — a ferramenta
+  // continua funcionando pela fila gratuita nesse caso (ver
+  // enviarMensagem em chat.functions.ts), só fica mais lenta.
+  const entradaBloqueada = mutation.isPending;
 
   function enviar() {
     const valor = texto.trim();
-    if (valor.length < 3 || mutation.isPending || limiteAtingido) return;
+    if (valor.length < 3 || mutation.isPending) return;
     if (gravandoRef.current) pararGravacao();
+    setAvisoCredito(null);
     mutation.mutate(valor);
     setTexto("");
   }
@@ -397,6 +403,12 @@ export default function Chat({
             {mensagemDeErroAmigavel(mutation.error?.message)}
           </p>
         )}
+        {avisoCredito && !mutation.isPending && (
+          <p className="card-ornament flex items-start gap-1.5 p-4 text-sm text-muted-foreground">
+            <Info size={14} className="mt-0.5 shrink-0 text-gold" />
+            {avisoCredito}
+          </p>
+        )}
       </div>
 
       <form
@@ -405,13 +417,11 @@ export default function Chat({
       >
         <BarraDeUso uso={usoQuery.data} />
         <label htmlFor="texto" className="label-caps">
-          {limiteAtingido
-            ? "Crédito disponível esgotado"
-            : mutation.isPending
-              ? "Gerando resposta…"
-              : vazio
-                ? "Texto bíblico ou pergunta"
-                : "Continue a conversa"}
+          {mutation.isPending
+            ? "Gerando resposta…"
+            : vazio
+              ? "Texto bíblico ou pergunta"
+              : "Continue a conversa"}
         </label>
         <div className="relative mt-2">
           <textarea
@@ -422,15 +432,13 @@ export default function Chat({
             rows={2}
             disabled={entradaBloqueada}
             placeholder={
-              limiteAtingido
-                ? `Você atingiu o crédito mensal disponível — ${usoQuery.data ? formatarResetoCredito(usoQuery.data.proximoCicloEm) : ""}.`
-                : mutation.isPending
-                  ? "Aguardando a resposta…"
-                  : gravando
-                    ? "Ouvindo… fale sua pergunta"
-                    : vazio
-                      ? "Ex.: Salmo 23, João 1:1-14, ou uma pergunta como 'quem era Nicodemos?'"
-                      : "Digite outra referência que você tenha interesse em receber o contexto…"
+              mutation.isPending
+                ? "Aguardando a resposta…"
+                : gravando
+                  ? "Ouvindo… fale sua pergunta"
+                  : vazio
+                    ? "Ex.: Salmo 23, João 1:1-14, ou uma pergunta como 'quem era Nicodemos?'"
+                    : "Digite outra referência que você tenha interesse em receber o contexto…"
             }
             className="font-serif-body w-full resize-y rounded-md border border-input bg-background px-4 py-3 pr-24 text-lg outline-none transition-shadow placeholder:text-muted-foreground/70 focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
           />
@@ -491,9 +499,7 @@ export default function Chat({
           </p>
           <button
             type="submit"
-            disabled={
-              mutation.isPending || texto.trim().length < 3 || limiteAtingido
-            }
+            disabled={mutation.isPending || texto.trim().length < 3}
             className="inline-flex items-center gap-2 rounded-md bg-gradient-flame px-6 py-2.5 font-semibold tracking-wide text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
           >
             {mutation.isPending && <Loader2 size={16} className="animate-spin" />}

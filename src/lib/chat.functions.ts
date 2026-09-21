@@ -115,6 +115,12 @@ PROIBIÇÕES — nunca usar frases como:
 
 Sempre manter linguagem descritiva, informativa e SIMPLES. Você nunca deve interpretar. Responda sempre em português.`;
 
+function formatarDiasAte(data: Date): string {
+  const dias = Math.max(0, Math.ceil((data.getTime() - Date.now()) / (24 * 60 * 60 * 1000)));
+  if (dias === 0) return "esse crédito reseta ainda hoje";
+  return `esse crédito reseta em ${dias} dia${dias === 1 ? "" : "s"}`;
+}
+
 // Critério de qualidade mínima pra "analise_completa" — usado só na fila
 // gratuita (ver chamarIa/chamarGratuito em ai-provider.ts): se um
 // provedor devolver menos de 2 textos_paralelos, a fila tenta outro
@@ -227,7 +233,7 @@ export const enviarMensagem = createServerFn({ method: "POST" })
       })
       .parse(data),
   )
-  .handler(async ({ data }): Promise<{ conversaId: string; resposta: RespostaChat }> => {
+  .handler(async ({ data }): Promise<{ conversaId: string; resposta: RespostaChat; aviso?: string }> => {
     const usuario = await exigirUsuario();
 
     if (
@@ -278,6 +284,7 @@ export const enviarMensagem = createServerFn({ method: "POST" })
     // pouco menos rico que o modelo pago, mas o aluno nunca fica sem
     // conseguir estudar, e o custo pra nós não passa do orçamento.
     let creditoEsgotado = false;
+    let creditoResetaEm: Date | null = null;
     if (!respostaReferenciaInvalida && !dadosDoCache) {
       const { plano, assinaturaInicioEm, creditoAjusteUsd } = usuario as unknown as {
         plano: "anual" | "semestral";
@@ -287,6 +294,9 @@ export const enviarMensagem = createServerFn({ method: "POST" })
       const usado = await usoAcumuladoUsd(usuario.id);
       const disponivel = orcamentoAcumuladoUsd(plano, assinaturaInicioEm, creditoAjusteUsd);
       creditoEsgotado = usado >= disponivel;
+      if (creditoEsgotado) {
+        creditoResetaEm = proximoCicloEm(plano, assinaturaInicioEm);
+      }
     }
 
     let conversaId = data.conversaId;
@@ -403,7 +413,11 @@ export const enviarMensagem = createServerFn({ method: "POST" })
       .set({ updatedAt: new Date() })
       .where(eq(conversa.id, conversaId));
 
-    return { conversaId, resposta: resultado };
+    const aviso = creditoEsgotado
+      ? `Você atingiu o crédito mensal disponível${creditoResetaEm ? ` — ${formatarDiasAte(creditoResetaEm)}` : ""}. A ferramenta continua funcionando normalmente, só que pode demorar um pouco mais pra responder enquanto isso.`
+      : undefined;
+
+    return { conversaId, resposta: resultado, aviso };
   });
 
 export const obterUsoDiario = createServerFn({ method: "GET" }).handler(
