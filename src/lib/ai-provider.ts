@@ -398,9 +398,13 @@ export async function chamarIa<T>(
   // provedores diferentes "somem" o que cada um achou em vez de um
   // simplesmente substituir o outro. Também ignorado no modo Anthropic.
   mesclarComReserva?: (base: T, reserva: T) => T,
+  // Quando true, usa a fila gratuita mesmo com AI_PROVIDER=anthropic —
+  // é assim que o chat.functions.ts implementa o "estourou o crédito do
+  // aluno, cai pro modo gratuito em vez de bloquear" (ver enviarMensagem).
+  forcarGratuito?: boolean,
 ): Promise<ResultadoChamadaIa<T>> {
   const provedor = process.env["AI_PROVIDER"] || "anthropic";
-  if (provedor === "anthropic") {
+  if (provedor === "anthropic" && !forcarGratuito) {
     return chamarAnthropic(systemPrompt, mensagens, schema);
   }
   return chamarGratuito(systemPrompt, mensagens, schema, atendeQualidadeMinima, mesclarComReserva);

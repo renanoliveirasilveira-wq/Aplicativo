@@ -115,12 +115,6 @@ PROIBIÇÕES — nunca usar frases como:
 
 Sempre manter linguagem descritiva, informativa e SIMPLES. Você nunca deve interpretar. Responda sempre em português.`;
 
-function formatarDiasAte(data: Date): string {
-  const dias = Math.max(0, Math.ceil((data.getTime() - Date.now()) / (24 * 60 * 60 * 1000)));
-  if (dias === 0) return "esse crédito reseta ainda hoje";
-  return `esse crédito reseta em ${dias} dia${dias === 1 ? "" : "s"}`;
-}
-
 // Critério de qualidade mínima pra "analise_completa" — usado só na fila
 // gratuita (ver chamarIa/chamarGratuito em ai-provider.ts): se um
 // provedor devolver menos de 2 textos_paralelos, a fila tenta outro
@@ -278,6 +272,12 @@ export const enviarMensagem = createServerFn({ method: "POST" })
       ? await buscarAnaliseCache(chaveCache, VERSAO_PROMPT)
       : null;
 
+    // Quando o crédito pago (Anthropic) do aluno acaba, a gente não
+    // bloqueia mais o acesso — passa a responder pela fila gratuita
+    // (Gemini/OpenRouter, ver ai-provider.ts). Fica mais lento e um
+    // pouco menos rico que o modelo pago, mas o aluno nunca fica sem
+    // conseguir estudar, e o custo pra nós não passa do orçamento.
+    let creditoEsgotado = false;
     if (!respostaReferenciaInvalida && !dadosDoCache) {
       const { plano, assinaturaInicioEm, creditoAjusteUsd } = usuario as unknown as {
         plano: "anual" | "semestral";
@@ -286,14 +286,7 @@ export const enviarMensagem = createServerFn({ method: "POST" })
       };
       const usado = await usoAcumuladoUsd(usuario.id);
       const disponivel = orcamentoAcumuladoUsd(plano, assinaturaInicioEm, creditoAjusteUsd);
-      if (usado >= disponivel) {
-        const proximo = proximoCicloEm(plano, assinaturaInicioEm);
-        throw new Error(
-          proximo
-            ? `Você atingiu o crédito mensal disponível — ${formatarDiasAte(proximo)}. O que não for usado continua disponível depois, não se perde. Se precisar de mais crédito antes disso, entre em contato com o suporte.`
-            : "Você atingiu todo o crédito do seu plano. Entre em contato com o suporte para renovar ou solicitar mais crédito.",
-        );
-      }
+      creditoEsgotado = usado >= disponivel;
     }
 
     let conversaId = data.conversaId;
@@ -346,6 +339,7 @@ export const enviarMensagem = createServerFn({ method: "POST" })
         RespostaChatIaSchema,
         atendeQualidadeMinima,
         mesclarComReserva,
+        creditoEsgotado,
       );
 
       // Uma referência "limpa" (só isso, sem pergunta junto) sempre deveria
@@ -366,6 +360,7 @@ export const enviarMensagem = createServerFn({ method: "POST" })
           RespostaChatIaSchema,
           atendeQualidadeMinima,
           mesclarComReserva,
+          creditoEsgotado,
         );
         bruto = segunda.dados;
         custoUsd += segunda.custoUsd;
