@@ -8,6 +8,7 @@ type ProvisionarAcessoInput = {
   email: string;
   nome: string;
   eduzzTransactionId: string;
+  plano: "anual" | "semestral";
 };
 
 /**
@@ -18,10 +19,18 @@ export async function provisionarAcessoEduzz({
   email,
   nome,
   eduzzTransactionId,
+  plano,
 }: ProvisionarAcessoInput) {
   const existente = await db.query.user.findFirst({
     where: eq(user.email, email),
   });
+
+  // A data de início da assinatura é o que o cálculo de orçamento de IA
+  // usa pra saber quanto crédito já foi liberado (ver
+  // orcamentoAcumuladoUsd em src/lib/uso.ts) — sem ela definida, o
+  // cálculo quebra. Uma compra nova (seja conta nova ou reativação)
+  // reinicia o ciclo a partir de agora.
+  const assinaturaInicioEm = new Date();
 
   if (existente) {
     // Reativa (cobre o caso de reembolso seguido de nova compra, por
@@ -35,6 +44,8 @@ export async function provisionarAcessoEduzz({
       .set({
         status: "active",
         eduzzTransactionId,
+        plano,
+        assinaturaInicioEm,
         banned: false,
         banExpires: null,
         banReason: null,
@@ -54,7 +65,7 @@ export async function provisionarAcessoEduzz({
 
   await db
     .update(user)
-    .set({ status: "active", eduzzTransactionId })
+    .set({ status: "active", eduzzTransactionId, plano, assinaturaInicioEm })
     .where(eq(user.email, email));
 
   // A conta nasce com uma senha aleatória que ninguém sabe — esse e-mail

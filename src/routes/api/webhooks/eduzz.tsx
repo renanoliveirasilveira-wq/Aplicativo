@@ -14,6 +14,15 @@ const EVENTOS_REVOGA_ACESSO = new Set([
   "myeduzz.invoice_refunded",
 ]);
 
+// Os dois produtos cadastrados na Eduzz pra esse curso — um único webhook
+// recebe eventos dos dois (e de qualquer outro produto da conta); é o
+// productId de cada item comprado que diz qual plano é.
+const PRODUTO_PARA_PLANO: Record<string, "anual" | "semestral"> = {
+  "3112655": "semestral",
+  "3112659": "anual",
+};
+const PLANO_PADRAO = "anual";
+
 type PessoaEduzz = { name?: string; email?: string } | undefined;
 
 type PayloadEduzz = {
@@ -26,8 +35,23 @@ type PayloadEduzz = {
     student?: PessoaEduzz;
     transaction?: { id?: string };
     id?: string;
+    items?: { productId?: string }[];
   };
 };
+
+function identificarPlano(payload: PayloadEduzz): "anual" | "semestral" {
+  const itens = payload.data?.items ?? [];
+  for (const item of itens) {
+    const plano = item.productId ? PRODUTO_PARA_PLANO[item.productId] : undefined;
+    if (plano) return plano;
+  }
+  console.warn(
+    `[webhook eduzz] nenhum item bate com os produtos conhecidos (${itens
+      .map((i) => i.productId)
+      .join(", ")}) — usando plano padrão "${PLANO_PADRAO}"`,
+  );
+  return PLANO_PADRAO;
+}
 
 function assinaturaValida(corpoBruto: string, assinaturaRecebida: string | null): boolean {
   const segredo = process.env["EDUZZ_WEBHOOK_SECRET"];
@@ -75,14 +99,16 @@ export const Route = createFileRoute("/api/webhooks/eduzz")({
             console.warn(`[webhook eduzz] evento ${evento} sem e-mail de comprador/aluno`);
             return json({ recebido: true, erro: "sem e-mail" }, { status: 200 });
           }
+          const plano = identificarPlano(payload);
           const resultado = await provisionarAcessoEduzz({
             email,
             nome: pessoa?.name ?? email,
             eduzzTransactionId:
               payload.data?.transaction?.id ?? payload.data?.id ?? "desconhecido",
+            plano,
           });
           console.log(
-            `[webhook eduzz] acesso ${resultado.criado ? "criado" : "reativado"} para ${email}`,
+            `[webhook eduzz] acesso ${resultado.criado ? "criado" : "reativado"} (plano ${plano}) para ${email}`,
           );
           return json({ recebido: true }, { status: 200 });
         }
