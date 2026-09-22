@@ -18,8 +18,8 @@ const EVENTOS_REVOGA_ACESSO = new Set([
 // recebe eventos dos dois (e de qualquer outro produto da conta); é o
 // productId de cada item comprado que diz qual plano é.
 const PRODUTO_PARA_PLANO: Record<string, "anual" | "semestral"> = {
-  "3112655": "semestral",
-  "3112659": "anual",
+  "3112995": "semestral",
+  "3112992": "anual",
 };
 const PLANO_PADRAO = "anual";
 
